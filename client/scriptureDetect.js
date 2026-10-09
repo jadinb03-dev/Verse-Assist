@@ -172,6 +172,49 @@ function vaIsDuplicate(cue, accepted) {
   return false;
 }
 
+// Non-scripture production markers (Website/Helpline/BRoll/Definition/Product) - a
+// separate, much simpler track from scripture cues. No KJV lookup, no display/reference.
+var VA_MARKER_TYPES = ["Website", "Helpline", "BRoll", "Definition", "Product"];
+
+function vaValidateMarkerCue(raw) {
+  var reasons = [];
+  if (VA_MARKER_TYPES.indexOf(raw.type) === -1) { reasons.push("type must be one of " + VA_MARKER_TYPES.join(", ")); }
+  if (!/^\d{2}:\d{2}:\d{2},\d{3}$/.test(raw.tc_in || "")) { reasons.push("bad tc_in"); }
+  if (reasons.length) { return { ok: false, marker: null, reason: reasons.join("; ") }; }
+  var startSec = vaSrtTimeToSeconds(raw.tc_in);
+  return {
+    ok: true,
+    marker: {
+      type: raw.type,
+      tc_in: raw.tc_in,
+      startSec: startSec,
+      name: String(raw.name || "").trim(),
+      trigger_quote: String(raw.trigger_quote || "")
+    },
+    reason: null
+  };
+}
+
+function vaIsDuplicateMarker(marker, accepted) {
+  for (var i = 0; i < accepted.length; i++) {
+    var a = accepted[i];
+    if (a.type === marker.type && a.name === marker.name && Math.abs(a.startSec - marker.startSec) < 3) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Interpolates the per-episode product teaching name into the shared prompt, so the
+// model knows what "this teaching"/"this series" refers to for the Product marker type.
+function vaBuildDetectSystemPrompt(productTeachingName) {
+  var name = (productTeachingName || "").trim();
+  var note = name
+    ? "Current product teaching name for this episode: \"" + name + "\"."
+    : "Current product teaching name for this episode: (none set - do not assume any specific series name).";
+  return VA_DETECT_PROMPT + "\n\n---\n\n" + note;
+}
+
 function vaCarryInFrom(accepted) {
   if (accepted.length === 0) return "none (start of transcript)";
   var last = accepted[accepted.length - 1];
@@ -182,7 +225,8 @@ function vaCarryInFrom(accepted) {
 // onDone({cues, skipped, rejected, failedChunks}) fires at the end.
 function vaRunScriptureDetection(opts, onEvent, onDone) {
   var chunks = vaChunkBlocks(opts.blocks, VA_DETECT_CORE_SECONDS, VA_DETECT_OVERLAP_SECONDS);
-  var result = { cues: [], skipped: [], rejected: [], failedChunks: [], chunkCount: chunks.length };
+  var result = { cues: [], markers: [], skipped: [], rejected: [], failedChunks: [], chunkCount: chunks.length };
+  var systemPrompt = vaBuildDetectSystemPrompt(opts.productTeachingName);
   var idx = 0;
 
   function next() {
@@ -196,7 +240,7 @@ function vaRunScriptureDetection(opts, onEvent, onDone) {
     var attempts = 0;
     function attempt() {
       attempts++;
-      vaCallClaude(opts.apiKey, opts.model, VA_DETECT_PROMPT, userMsg, function (err, text) {
+      vaCallClaude(opts.apiKey, opts.model, systemPrompt, userMsg, function (err, text) {
         if (err) return fail(err);
         var obj;
         try { obj = vaExtractJson(text); } catch (e) { return fail("invalid JSON: " + e.message); }
@@ -214,11 +258,26 @@ function vaRunScriptureDetection(opts, onEvent, onDone) {
           result.cues.push(v.cue);
           accepted++;
         });
+        var acceptedMarkers = 0;
+        if (Array.isArray(obj.markers)) {
+          obj.markers.forEach(function (raw) {
+            var vm = vaValidateMarkerCue(raw);
+            if (!vm.ok) {
+              result.rejected.push({ chunk: chunk.number, tc: raw.tc_in || "?", reference: raw.type || "?", reason: vm.reason });
+              return;
+            }
+            if (!vaOwnedByChunk(vm.marker, chunk, isLast)) return;
+            if (vaIsDuplicateMarker(vm.marker, result.markers)) return;
+            result.markers.push(vm.marker);
+            acceptedMarkers++;
+          });
+        }
         if (Array.isArray(obj.skipped_notes)) {
           obj.skipped_notes.forEach(function (n) { result.skipped.push({ chunk: chunk.number, tc: n.tc, quote: n.quote, reason: n.reason }); });
         }
         result.cues.sort(function (a, b) { return a.startSec - b.startSec; });
-        onEvent(label + " done: " + accepted + " cue(s) accepted.", "ok");
+        result.markers.sort(function (a, b) { return a.startSec - b.startSec; });
+        onEvent(label + " done: " + accepted + " cue(s), " + acceptedMarkers + " marker(s) accepted.", "ok");
         idx++;
         next();
       });

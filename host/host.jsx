@@ -286,7 +286,8 @@ function vaUncoveredGaps(track, spanS, spanE, tol) {
 //   fsEnabled, fsMogrtName, fsTrackIndex, fsTextParamName, fsAnimationParamName,
 //   previousMarkers: [{startSec, reference}],   // markers placed by the last apply
 //   lt: [{tc_in, tc_out, reference}],
-//   fs: [{tc_in, displayEnd, reference, verseText}]
+//   fs: [{tc_in, displayEnd, reference, verseText}],
+//   markers: [{type, tc_in, name, triggerQuote}]   // non-scripture production markers
 // }
 // Removes the previous Verse Assist output first (clips and "VA |" markers),
 // then places the approved LT rows and creates the approved fullscreen markers.
@@ -332,9 +333,10 @@ function vaApplyApproved(payloadJson) {
         var oldMarkers = [];
         var m = markers.getFirstMarker();
         while (m) {
-            // One-time migration: markers from before this name change still carry the
-            // old "VA |" tag and have no recorded-position entry to match against, so
-            // they're swept by that tag as a fallback alongside the position match.
+            // Any "VA |"-tagged marker is swept by that tag alone: it catches markers
+            // from before the fullscreen naming change (which have no recorded-position
+            // entry to match against), and it's also the live removal path for the
+            // production markers placed below, which keep the "VA |" tag on purpose.
             if (m.name && m.name.indexOf("VA |") === 0) {
                 oldMarkers.push(m);
             } else {
@@ -699,6 +701,26 @@ function vaApplyApproved(payloadJson) {
                 } catch (eFg) {
                     report.errors.push("FS graphic " + fr.reference + " at " + fr.tc_in + ": " + String(eFg));
                 }
+            }
+        }
+
+        // 5. Non-scripture production markers (Website/Helpline/BRoll/Definition/
+        // Product) - plain markers only, no graphic, left at Premiere's default color
+        // on purpose. Named "VA | <type> | <name>" so the sweep above picks them up
+        // again next time without any position bookkeeping.
+        var otherMarkers = p.markers || [];
+        report.markersOther = 0;
+        for (i = 0; i < otherMarkers.length; i++) {
+            var om = otherMarkers[i];
+            try {
+                var omSec = vaTimecodeToSeconds(om.tc_in, timing.nominalFps, timing.isDropFrame, timing.actualFrameRate);
+                var omk = markers.createMarker(omSec);
+                if (!omk) { throw new Error("createMarker returned null"); }
+                omk.name = "VA | " + om.type + (om.name ? " | " + om.name : "");
+                omk.comments = om.triggerQuote || "";
+                report.markersOther++;
+            } catch (eOm) {
+                report.errors.push(om.type + " marker at " + om.tc_in + ": " + String(eOm));
             }
         }
 

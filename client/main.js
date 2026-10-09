@@ -505,6 +505,7 @@ document.addEventListener("DOMContentLoaded", function () {
   var LS_KEY_MODEL = "verseAssist.claudeModel";
   var LS_KEY_TRANSCRIPT = "verseAssist.transcriptPath";
   var LS_KEY_LAST_DETECTION = "verseAssist.lastDetection";
+  var LS_KEY_PRODUCT_NAME = "verseAssist.productTeachingName";
 
   function log4(msg, cls) {
     var el = document.getElementById("stage4Log");
@@ -519,24 +520,28 @@ document.addEventListener("DOMContentLoaded", function () {
     var k = localStorage.getItem(LS_KEY_API_KEY);
     var m = localStorage.getItem(LS_KEY_MODEL);
     var t = localStorage.getItem(LS_KEY_TRANSCRIPT);
+    var pn = localStorage.getItem(LS_KEY_PRODUCT_NAME);
     if (k) document.getElementById("claudeApiKey").value = k;
     if (m) document.getElementById("claudeModel").value = m;
     if (t) document.getElementById("transcriptPath").value = t;
+    if (pn) document.getElementById("productTeachingName").value = pn;
   }
   function saveStage4Settings() {
     localStorage.setItem(LS_KEY_API_KEY, document.getElementById("claudeApiKey").value);
     localStorage.setItem(LS_KEY_MODEL, document.getElementById("claudeModel").value);
     localStorage.setItem(LS_KEY_TRANSCRIPT, document.getElementById("transcriptPath").value);
+    localStorage.setItem(LS_KEY_PRODUCT_NAME, document.getElementById("productTeachingName").value);
   }
 
   function renderStage4Result(res) {
     var lt = res.cues.filter(function (c) { return c.display === "LT"; }).length;
     var fs = res.cues.filter(function (c) { return c.display === "FS"; }).length;
     var flagged = res.cues.filter(function (c) { return c.flag; }).length;
+    var markers = res.markers || [];
 
     log4("", null);
     log4("=== RESULT ===", "info");
-    log4("Chunks: " + res.chunkCount + ". LT cues: " + lt + ". FS cues: " + fs + ". Flagged (verify/unsure): " + flagged + ".", "info");
+    log4("Chunks: " + res.chunkCount + ". LT cues: " + lt + ". FS cues: " + fs + ". Flagged (verify/unsure): " + flagged + ". Production markers: " + markers.length + ".", "info");
 
     if (res.failedChunks.length) {
       log4("WARNING: " + res.failedChunks.length + " chunk(s) FAILED. These time windows are NOT covered:", "err");
@@ -554,6 +559,12 @@ document.addEventListener("DOMContentLoaded", function () {
       log4(line, c.flag ? "warn" : null);
       if (c.display === "FS") log4("    \"" + c.verseText + "\"", "info");
       if (c.trigger_quote) log4("    quote: " + c.trigger_quote, null);
+    });
+
+    markers.forEach(function (m) {
+      var line = m.type + " " + m.tc_in + (m.name ? " | " + m.name : "");
+      log4(line, null);
+      if (m.trigger_quote) log4("    quote: " + m.trigger_quote, null);
     });
 
     if (res.rejected.length) {
@@ -578,7 +589,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   loadStage4Settings();
-  ["claudeApiKey", "claudeModel", "transcriptPath"].forEach(function (id) {
+  ["claudeApiKey", "claudeModel", "transcriptPath", "productTeachingName"].forEach(function (id) {
     document.getElementById(id).addEventListener("change", saveStage4Settings);
   });
 
@@ -622,7 +633,8 @@ document.addEventListener("DOMContentLoaded", function () {
           var blocks;
           try { blocks = vaParseSrt(file.text); } catch (e) { log4("Transcript parse error: " + e.message, "err"); return; }
           log4("Parsed " + blocks.length + " SRT blocks, ending " + blocks[blocks.length - 1].tcOut + ". Running single-pass detection...", "info");
-          vaRunScriptureDetection({ blocks: blocks, apiKey: apiKey, model: model }, log4, renderStage4Result);
+          var productTeachingName = document.getElementById("productTeachingName").value.trim();
+          vaRunScriptureDetection({ blocks: blocks, apiKey: apiKey, model: model, productTeachingName: productTeachingName }, log4, renderStage4Result);
         });
       });
     });
@@ -647,7 +659,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // Review rows are built from Stage 4 output. tc_out is the range the item
   // will occupy: the spoken end for LT, and the readable hold end for FS.
   function buildReviewRows(res) {
-    return res.cues.map(function (c, i) {
+    var rows = res.cues.map(function (c, i) {
       var isFs = c.display === "FS";
       return {
         id: i + 1,
@@ -663,6 +675,25 @@ document.addEventListener("DOMContentLoaded", function () {
         error: null
       };
     });
+    // Non-scripture production markers (Website/Helpline/BRoll/Definition/Product) -
+    // no KJV validation, no graphic, just a plain default-colored marker on apply.
+    (res.markers || []).forEach(function (m, i) {
+      rows.push({
+        id: rows.length + i + 1,
+        kind: "MARKER",
+        markerType: m.type,
+        tc_in: m.tc_in,
+        tc_out: m.tc_in,
+        reference: m.name || "",
+        mention_type: null,
+        flag: null,
+        comment: m.trigger_quote || "",
+        approved: true,
+        deleted: false,
+        error: null
+      });
+    });
+    return rows;
   }
 
   function saveReviewRows() {
@@ -672,6 +703,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // Re-checks one row's reference against the parser and KJV, and refreshes FS comment text.
   function validateReviewRow(row) {
     row.error = null;
+    if (row.kind === "MARKER") { return; } // type/tc_in already validated at detection/import time
     var parsed = vaParseReference(row.reference || "");
     if (!parsed.refs || parsed.refs.length === 0) { row.error = "reference does not parse"; row.comment = row.kind === "FS" ? "" : row.comment; return; }
     for (var i = 0; i < parsed.refs.length; i++) {
@@ -704,7 +736,7 @@ document.addEventListener("DOMContentLoaded", function () {
       var rowClass = row.flag ? "warn" : "";
       html += "<tr class='" + rowClass + "' style='border-top:1px solid #444;'>";
       html += "<td><input type='checkbox' data-act='approve' data-idx='" + idx + "'" + (row.approved ? " checked" : "") + "></td>";
-      html += "<td>" + row.kind + "</td>";
+      html += "<td>" + (row.kind === "MARKER" ? vaEscapeHtml(row.markerType) : row.kind) + "</td>";
       html += "<td>" + row.tc_in + "</td>";
       html += "<td>" + row.tc_out + "</td>";
       html += "<td><input type='text' data-act='ref' data-idx='" + idx + "' value='" + vaEscapeHtml(row.reference) + "' style='width:130px;" + (row.error ? "border-color:#e06060;" : "") + "'" + (row.error ? " title='" + vaEscapeHtml(row.error) + "'" : "") + "></td>";
@@ -758,10 +790,18 @@ document.addEventListener("DOMContentLoaded", function () {
       if (v.ok) accepted.push(v.cue);
       else rejected.push({ ref: raw.reference || "?", tc: raw.tc_in || "?", reason: v.reason });
     });
-    reviewRows = buildReviewRows({ cues: accepted });
+    var acceptedMarkers = [];
+    if (Array.isArray(obj.markers)) {
+      obj.markers.forEach(function (raw) {
+        var vm = vaValidateMarkerCue(raw);
+        if (vm.ok) acceptedMarkers.push(vm.marker);
+        else rejected.push({ ref: raw.type || "?", tc: raw.tc_in || "?", reason: vm.reason });
+      });
+    }
+    reviewRows = buildReviewRows({ cues: accepted, markers: acceptedMarkers });
     saveReviewRows();
     renderReviewTable();
-    log5("Loaded " + accepted.length + " cue(s) into review. Rejected " + rejected.length + ".", rejected.length ? "warn" : "ok");
+    log5("Loaded " + accepted.length + " cue(s), " + acceptedMarkers.length + " marker(s) into review. Rejected " + rejected.length + ".", rejected.length ? "warn" : "ok");
     rejected.forEach(function (r) { log5("  rejected " + r.tc + " " + r.ref + ": " + r.reason, "warn"); });
     if (Array.isArray(obj.skipped_notes) && obj.skipped_notes.length) {
       log5("Skipped notes: " + obj.skipped_notes.length, "info");
@@ -859,16 +899,19 @@ document.addEventListener("DOMContentLoaded", function () {
       }),
       fs: approvedRows.filter(function (r) { return r.kind === "FS"; }).map(function (r) {
         return { tc_in: r.tc_in, displayEnd: r.tc_out, reference: r.reference, verseText: r.comment };
+      }),
+      markers: approvedRows.filter(function (r) { return r.kind === "MARKER"; }).map(function (r) {
+        return { type: r.markerType, tc_in: r.tc_in, name: r.reference, triggerQuote: r.comment };
       })
     };
 
-    log5("Applying " + payload.lt.length + " LT and " + payload.fs.length + " FS. Removing previous Verse Assist output first...", "info");
+    log5("Applying " + payload.lt.length + " LT, " + payload.fs.length + " FS, " + payload.markers.length + " production marker(s). Removing previous Verse Assist output first...", "info");
     evalHost("vaApplyApproved(" + JSON.stringify(JSON.stringify(payload)) + ")", function (result) {
       var rep;
       try { rep = JSON.parse(result); } catch (e) { log5("Non-JSON response: " + result, "err"); return; }
       if (!rep.success) { log5("FAILED: " + rep.error, "err"); return; }
       log5("Removed previous: " + rep.removedClips + " clip(s), " + rep.removedMarkers + " marker(s).", "info");
-      log5("Placed LT: " + rep.placedLt + " (+ " + (rep.placedFsLt || 0) + " fullscreen fallback LT, " + (rep.fsLtSkippedOverlap || 0) + " skipped - already covered by a wider citation). Default pieces: " + (rep.defaultPieces || 0) + " (" + (rep.defaultShort || 0) + " shorter than asked, filled in further pieces). Uncovered after fill: " + (rep.uncovered === undefined ? "n/a" : rep.uncovered) + ". Meets halfway: " + (rep.meetCount || 0) + ". Transitions: " + (rep.transitions || 0) + ". Cuts shifted behind a fullscreen: " + (rep.fsCutsShifted || 0) + ". Fullscreen markers: " + rep.markersFs + ". Fullscreen graphics placed: " + (rep.placedFs || 0) + ".", rep.errors.length ? "warn" : "ok");
+      log5("Placed LT: " + rep.placedLt + " (+ " + (rep.placedFsLt || 0) + " fullscreen fallback LT, " + (rep.fsLtSkippedOverlap || 0) + " skipped - already covered by a wider citation). Default pieces: " + (rep.defaultPieces || 0) + " (" + (rep.defaultShort || 0) + " shorter than asked, filled in further pieces). Uncovered after fill: " + (rep.uncovered === undefined ? "n/a" : rep.uncovered) + ". Meets halfway: " + (rep.meetCount || 0) + ". Transitions: " + (rep.transitions || 0) + ". Cuts shifted behind a fullscreen: " + (rep.fsCutsShifted || 0) + ". Fullscreen markers: " + rep.markersFs + ". Fullscreen graphics placed: " + (rep.placedFs || 0) + ". Production markers: " + (rep.markersOther || 0) + ".", rep.errors.length ? "warn" : "ok");
       if (rep.transitionNote) log5("  " + rep.transitionNote, "info");
       if (rep.qeItemCount !== undefined) log5("  QE track item count: " + rep.qeItemCount + " vs. our clip count: " + rep.domClipCount + ". QE items matched by name: " + rep.qeMatchedClips + ".", "info");
       rep.errors.forEach(function (er) { log5("  - " + er, "warn"); });

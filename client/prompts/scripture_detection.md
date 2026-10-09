@@ -172,6 +172,39 @@ Rule of thumb: commit to a leap when it hangs on a specific phrase. Do not commi
 
 ---
 
+## 7A. Non-scripture production markers
+
+Besides scripture LT/FS cues, flag five other kinds of moment with a plain marker (no
+graphic, no KJV lookup - these never touch the `cues` array). Output them in a separate
+`markers` array (Section 8). **Do not assign a color** - the extension leaves these at
+Premiere's default marker color on purpose.
+
+| `type` | Trigger |
+|---|---|
+| `Website` | He mentions the website or past broadcasts. |
+| `Helpline` | He mentions calling the helpline or prayer line, or someone receiving salvation or the baptism of the Holy Spirit. |
+| `BRoll` | He mentions Vietnam or the facilities the ministry has. |
+| `Definition` | He refers to the definition of a word, in English, Greek or Hebrew. |
+| `Product` | He mentions anything a viewer could buy or obtain: a product, book, CD, DVD or other resource; another teaching or series ("I taught on this in...", "get the teaching on..."); or the current product teaching (see below). Do **not** trigger on the Bible itself or on generic teaching language like "as I'm teaching you today." |
+
+**Current product teaching name:** the system prompt for a given episode may state the
+current product teaching's name. When it does, a mention of that series by name, or of
+"this teaching"/"this series" pointing at it as something to get, also triggers `Product`.
+When no name is stated, only an explicitly named product/resource triggers it.
+
+Each marker gets:
+- `type`: one of the five values above, exactly.
+- `tc_in`: the SRT timecode where the mention happens (point marker, no span).
+- `name`: a short detail where one is naturally available - the word being defined for
+  `Definition`, the product/series name for `Product` (if stated, otherwise the literal
+  string `"unnamed"`), otherwise omit or leave empty.
+- `trigger_quote`: the words that triggered it, same purpose as on a scripture cue.
+
+The extension names the Premiere marker `VA | <type> | <name>` (or just `VA | <type>` when
+`name` is empty), and sets `comments` to `trigger_quote`.
+
+---
+
 ## 8. Output format
 
 Return one JSON object, no other text, when called from the extension.
@@ -192,6 +225,14 @@ Return one JSON object, no other text, when called from the extension.
       "note": "Resolved from Matthew 7 context"
     }
   ],
+  "markers": [
+    {
+      "type": "Product",
+      "tc_in": "00:18:40,210",
+      "name": "The Overcomer's Life",
+      "trigger_quote": "get the teaching on the overcomer's life"
+    }
+  ],
   "skipped_notes": [
     { "tc": "00:12:54,000", "quote": "...", "reason": "personal anecdote" }
   ]
@@ -205,6 +246,7 @@ Field rules:
 - `mention_type`: one of the types in Section 4.
 - `flag`: `null`, `"verify"` (inferred, allusion, echo or "Bible says" guess) or `"unsure"` (placeholder `Genesis 1:1`). The extension appends the tag to the display text.
 - `trigger_quote`: the words (short) that triggered the cue. This becomes the marker comment and lets the editor audit your call.
+- `markers`: non-scripture production markers, per Section 7A. Separate from `cues` - never give one of these a `display`, `reference` or `mention_type`.
 - `skipped_notes`: places that looked like scripture but were deliberately skipped, with the reason.
 
 **Canonical book names** (use exactly these; `Psalm` is singular; `Revelation` is singular; numbered books use digits):
