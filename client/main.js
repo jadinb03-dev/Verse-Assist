@@ -831,7 +831,7 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   // Apply-time settings persist between sessions under verseAssist.s5.<id>.
-  var S5_IDS = ["defaultMogrtName", "fillDefault", "meetThresholdFrames", "labelsEnabled", "srLabelIndex", "defLabelIndex", "transitionsEnabled", "transitionName", "srSrFrames", "srDefFrames", "fsEnabled", "fsMogrtName", "fsTrackNumber", "fsTextParamName", "fsReferenceParamName", "fsAnimationParamName"];
+  var S5_IDS = ["defaultMogrtName", "fillDefault", "meetThresholdFrames", "labelsEnabled", "srLabelIndex", "defLabelIndex", "transitionsEnabled", "transitionName", "srSrFrames", "srDefFrames", "fsEnabled", "fsMogrtName", "fsTrackNumber", "fsTextParamName", "fsReferenceParamName", "fsAnimationParamName", "nameEnabled", "nameMogrtName", "nameTextParamName", "nameText", "nameAnimationParamName"];
   S5_IDS.forEach(function (id) {
     var el = document.getElementById(id);
     var saved = localStorage.getItem("verseAssist.s5." + id);
@@ -892,6 +892,11 @@ document.addEventListener("DOMContentLoaded", function () {
       fsTextParamName: document.getElementById("fsTextParamName").value.trim(),
       fsReferenceParamName: document.getElementById("fsReferenceParamName").value.trim(),
       fsAnimationParamName: document.getElementById("fsAnimationParamName").value.trim(),
+      nameEnabled: document.getElementById("nameEnabled").checked,
+      nameMogrtName: document.getElementById("nameMogrtName").value.trim(),
+      nameTextParamName: document.getElementById("nameTextParamName").value.trim(),
+      nameText: document.getElementById("nameText").value.trim(),
+      nameAnimationParamName: document.getElementById("nameAnimationParamName").value.trim(),
       previousClips: prev && prev.placed ? prev.placed : [],
       previousMarkers: prev && prev.markers ? prev.markers : [],
       lt: approvedRows.filter(function (r) { return r.kind === "LT"; }).map(function (r) {
@@ -911,7 +916,7 @@ document.addEventListener("DOMContentLoaded", function () {
       try { rep = JSON.parse(result); } catch (e) { log5("Non-JSON response: " + result, "err"); return; }
       if (!rep.success) { log5("FAILED: " + rep.error, "err"); return; }
       log5("Removed previous: " + rep.removedClips + " clip(s), " + rep.removedMarkers + " marker(s).", "info");
-      log5("Placed LT: " + rep.placedLt + " (+ " + (rep.placedFsLt || 0) + " fullscreen fallback LT, " + (rep.fsLtSkippedOverlap || 0) + " skipped - already covered by a wider citation). Default pieces: " + (rep.defaultPieces || 0) + " (" + (rep.defaultShort || 0) + " shorter than asked, filled in further pieces). Uncovered after fill: " + (rep.uncovered === undefined ? "n/a" : rep.uncovered) + ". Meets halfway: " + (rep.meetCount || 0) + ". Transitions: " + (rep.transitions || 0) + ". Cuts shifted behind a fullscreen: " + (rep.fsCutsShifted || 0) + ". Fullscreen markers: " + rep.markersFs + ". Fullscreen graphics placed: " + (rep.placedFs || 0) + ". Production markers: " + (rep.markersOther || 0) + ".", rep.errors.length ? "warn" : "ok");
+      log5("Placed LT: " + rep.placedLt + " (+ " + (rep.placedFsLt || 0) + " fullscreen fallback LT, " + (rep.fsLtSkippedOverlap || 0) + " skipped - already covered by a wider citation). Default pieces: " + (rep.defaultPieces || 0) + " (" + (rep.defaultShort || 0) + " shorter than asked, filled in further pieces). Uncovered after fill: " + (rep.uncovered === undefined ? "n/a" : rep.uncovered) + ". Meets halfway: " + (rep.meetCount || 0) + ". Transitions: " + (rep.transitions || 0) + ". Cuts shifted behind a fullscreen: " + (rep.fsCutsShifted || 0) + ". Fullscreen markers: " + rep.markersFs + ". Fullscreen graphics placed: " + (rep.placedFs || 0) + ". Production markers: " + (rep.markersOther || 0) + ". Name graphic pieces: " + (rep.namePieces || 0) + ".", rep.errors.length ? "warn" : "ok");
       if (rep.transitionNote) log5("  " + rep.transitionNote, "info");
       if (rep.qeItemCount !== undefined) log5("  QE track item count: " + rep.qeItemCount + " vs. our clip count: " + rep.domClipCount + ". QE items matched by name: " + rep.qeMatchedClips + ".", "info");
       rep.errors.forEach(function (er) { log5("  - " + er, "warn"); });

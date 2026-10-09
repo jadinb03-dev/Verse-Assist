@@ -284,6 +284,7 @@ function vaUncoveredGaps(track, spanS, spanE, tol) {
 //   meetThresholdFrames, fillDefault, defaultMogrtName,
 //   transitionsEnabled, transitionName, srSrFrames, srDefFrames,
 //   fsEnabled, fsMogrtName, fsTrackIndex, fsTextParamName, fsAnimationParamName,
+//   nameEnabled, nameMogrtName, nameTextParamName, nameAnimationParamName,
 //   previousMarkers: [{startSec, reference}],   // markers placed by the last apply
 //   lt: [{tc_in, tc_out, reference}],
 //   fs: [{tc_in, displayEnd, reference, verseText}],
@@ -319,7 +320,9 @@ function vaApplyApproved(payloadJson) {
                 catch (eR) { report.errors.push("Could not remove previous clip " + targets[t].name + " at " + targets[t].start.seconds + "s: " + eR); }
             }
         };
-        vaSweepTrack(p.videoTrackIndex, [p.mogrtName, p.defaultMogrtName]);
+        var mainSweepNames = [p.mogrtName, p.defaultMogrtName];
+        if (p.nameEnabled && p.nameMogrtName) { mainSweepNames.push(p.nameMogrtName); }
+        vaSweepTrack(p.videoTrackIndex, mainSweepNames);
         if (p.fsEnabled && p.fsMogrtName) { vaSweepTrack(p.fsTrackIndex, [p.fsMogrtName]); }
 
         // 2. Previous fullscreen markers from the last apply. Markers are now named with
@@ -500,7 +503,7 @@ function vaApplyApproved(payloadJson) {
         // Any existing clip overlapping the target range is a conflict and is logged,
         // including leftover clips that share a MOGRT name. Previous Verse Assist output
         // is removed before this runs, so only unrecorded clips can conflict.
-        var isVaName = function (n) { return n === p.mogrtName || n === p.defaultMogrtName; };
+        var isVaName = function (n) { return n === p.mogrtName || n === p.defaultMogrtName || (p.nameEnabled && n === p.nameMogrtName); };
 
         // Places one item on the given track. Throws with a reason if it can't be placed.
         // textParamName/animationParamName are passed in rather than closed over, since the
@@ -623,6 +626,59 @@ function vaApplyApproved(payloadJson) {
                     var dc = ltTrack.clips[c];
                     if (dc.end.seconds > dS && dc.start.seconds < dE) {
                         report.errors.push("  DUMP near " + left[d][0].toFixed(3) + "s: \"" + dc.name + "\" " + dc.start.seconds.toFixed(3) + "s-" + dc.end.seconds.toFixed(3) + "s");
+                    }
+                }
+            }
+        }
+
+        // 2c. Optional: fill the genuinely blank stretches before the first reference and
+        // after the last one with a speaker-name graphic, since otherwise nothing at all
+        // sits there. Same place-and-read-back-actual-end approach as the default fill, so
+        // any length limit on the name MOGRT is handled the same way. The trailing edge is
+        // the actual end of content (the furthest .end across every video track) rather
+        // than a sequence-level "end" property, since nothing elsewhere in this project
+        // relies on one and it's safer to measure the real track content directly.
+        if (p.nameEnabled && p.nameMogrtName && items.length) {
+            var nameProject = vaFindProjectItemByName(app.project.rootItem, p.nameMogrtName);
+            if (!nameProject) {
+                report.errors.push("Name graphic: MOGRT \"" + p.nameMogrtName + "\" not found in the Project panel - skipped.");
+            } else {
+                report.namePieces = 0;
+                var nCur = 0;
+                var nGuard = 0;
+                while (spanS - nCur > tol && nGuard < 500) {
+                    nGuard++;
+                    try {
+                        var nPiece = placeTimelineItem({ kind: "NAME", row: null, inS: nCur, outS: spanS, label: "Name fill (lead-in)", textValue: p.nameText }, nameProject, p.nameMogrtName, ltTrack, p.nameTextParamName, p.nameAnimationParamName);
+                        report.namePieces++;
+                        if (nPiece.end.seconds <= nCur + tol) { report.errors.push("Name fill at " + nCur.toFixed(2) + "s: the MOGRT would not extend."); break; }
+                        nCur = nPiece.end.seconds;
+                    } catch (eName) {
+                        report.errors.push("Name fill (lead-in) at " + nCur.toFixed(2) + "s: " + String(eName));
+                        break;
+                    }
+                }
+
+                var seqEndSeconds = 0;
+                for (var vt = 0; vt < seq.videoTracks.numTracks; vt++) {
+                    var vtrack = seq.videoTracks[vt];
+                    for (var vc2 = 0; vc2 < vtrack.clips.numItems; vc2++) {
+                        var vEnd = vtrack.clips[vc2].end.seconds;
+                        if (vEnd > seqEndSeconds) { seqEndSeconds = vEnd; }
+                    }
+                }
+                var nCur2 = spanE;
+                var nGuard2 = 0;
+                while (seqEndSeconds - nCur2 > tol && nGuard2 < 500) {
+                    nGuard2++;
+                    try {
+                        var nPiece2 = placeTimelineItem({ kind: "NAME", row: null, inS: nCur2, outS: seqEndSeconds, label: "Name fill (trail-out)", textValue: p.nameText }, nameProject, p.nameMogrtName, ltTrack, p.nameTextParamName, p.nameAnimationParamName);
+                        report.namePieces++;
+                        if (nPiece2.end.seconds <= nCur2 + tol) { report.errors.push("Name fill at " + nCur2.toFixed(2) + "s: the MOGRT would not extend."); break; }
+                        nCur2 = nPiece2.end.seconds;
+                    } catch (eName2) {
+                        report.errors.push("Name fill (trail-out) at " + nCur2.toFixed(2) + "s: " + String(eName2));
+                        break;
                     }
                 }
             }
