@@ -687,6 +687,13 @@ function vaApplyApproved(payloadJson) {
                 try {
                     var fsItem = { kind: "FS", row: fr, inS: fIn, outS: fOut, label: "FS " + fr.tc_in + " " + fr.reference, textValue: fr.verseText };
                     var plFs = placeTimelineItem(fsItem, fsProject, p.fsMogrtName, fsTrack, p.fsTextParamName, p.fsAnimationParamName);
+                    // The fullscreen template has two separate text boxes - verse text
+                    // (set above, same path every other text param goes through) and the
+                    // reference, set here directly since it's unique to this one MOGRT.
+                    if (p.fsReferenceParamName) {
+                        var refTxt = vaSetMgtText(plFs, p.fsReferenceParamName, fr.reference);
+                        if (!refTxt.ok) { report.errors.push("FS reference text " + fr.reference + " at " + fr.tc_in + ": " + refTxt.error); }
+                    }
                     report.placedFs++;
                     report.placed.push({ trackIndex: p.fsTrackIndex, startSec: plFs.start.seconds, name: plFs.name });
                 } catch (eFg) {

@@ -791,7 +791,7 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   // Apply-time settings persist between sessions under verseAssist.s5.<id>.
-  var S5_IDS = ["defaultMogrtName", "fillDefault", "meetThresholdFrames", "labelsEnabled", "srLabelIndex", "defLabelIndex", "transitionsEnabled", "transitionName", "srSrFrames", "srDefFrames", "fsEnabled", "fsMogrtName", "fsTrackNumber", "fsTextParamName", "fsAnimationParamName"];
+  var S5_IDS = ["defaultMogrtName", "fillDefault", "meetThresholdFrames", "labelsEnabled", "srLabelIndex", "defLabelIndex", "transitionsEnabled", "transitionName", "srSrFrames", "srDefFrames", "fsEnabled", "fsMogrtName", "fsTrackNumber", "fsTextParamName", "fsReferenceParamName", "fsAnimationParamName"];
   S5_IDS.forEach(function (id) {
     var el = document.getElementById(id);
     var saved = localStorage.getItem("verseAssist.s5." + id);
@@ -850,6 +850,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return n - 1;
       })(),
       fsTextParamName: document.getElementById("fsTextParamName").value.trim(),
+      fsReferenceParamName: document.getElementById("fsReferenceParamName").value.trim(),
       fsAnimationParamName: document.getElementById("fsAnimationParamName").value.trim(),
       previousClips: prev && prev.placed ? prev.placed : [],
       previousMarkers: prev && prev.markers ? prev.markers : [],
