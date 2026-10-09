@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ExtensionManifest Version="12.0" ExtensionBundleId="com.claudeedit.verseassist" ExtensionBundleVersion="0.1.0" ExtensionBundleName="Verse Assist Beta" xmlns:ExtensionBundleId="http://ns.adobe.com/extension">
+  <ExtensionList>
+    <Extension Id="com.claudeedit.verseassist.panel" Version="0.1.0"/>
+  </ExtensionList>
+  <ExecutionEnvironment>
+    <HostList>
+      <Host Name="PPRO" Version="[1.0,99.9]"/>
+    </HostList>
+    <LocaleList>
+      <Locale Code="All"/>
+    </LocaleList>
+    <RequiredRuntimeList>
+      <RequiredRuntime Name="CSXS" Version="12.0"/>
+    </RequiredRuntimeList>
+  </ExecutionEnvironment>
+  <DispatchInfoList>
+    <Extension Id="com.claudeedit.verseassist.panel">
+      <DispatchInfo>
+        <Resources>
+          <MainPath>./client/index.html</MainPath>
+          <ScriptPath>./host/host.jsx</ScriptPath>
+        </Resources>
+        <Lifecycle>
+          <AutoVisible>true</AutoVisible>
+        </Lifecycle>
+        <UI>
+          <Type>Panel</Type>
+          <Menu>Verse Assist Beta</Menu>
+          <Geometry>
+            <Size>
+              <Height>650</Height>
+              <Width>520</Width>
+            </Size>
+            <MinSize>
+              <Height>400</Height>
+              <Width>400</Width>
+            </MinSize>
+            <MaxSize>
+              <Height>2000</Height>
+              <Width>1400</Width>
+            </MaxSize>
+          </Geometry>
+        </UI>
+      </DispatchInfo>
+    </Extension>
+  </DispatchInfoList>
+</ExtensionManifest>

@@ -1,0 +1,7 @@
+# OS cruft (Windows + Mac, since this repo is worked on from both)
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor/IDE
+.vscode/

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="./books.js"></script>
+<script src="./referenceParser.js"></script>
+<script src="./kjvLookup.js"></script>
+<script src="./srt.js"></script>
+<script src="./scriptureDetect.js"></script>
+</head>
+<body>
+<pre id="out" style="font-family:monospace;font-size:12px;white-space:pre-wrap;"></pre>
+<script>
+var out = document.getElementById("out");
+function p(s) { out.textContent += s + "\n"; }
+
+// Mock: lets us test the full pipeline (chunking, carry-forward, validation,
+// dedupe, FS hold time) without a real API call.
+var mockResponses = [];
+var mockCallCount = 0;
+vaCallClaude = function (apiKey, model, system, userMessage, callback) {
+  mockCallCount++;
+  var resp = mockResponses.length ? mockResponses.shift() : '{"cues":[],"skipped_notes":[]}';
+  setTimeout(function () { callback(null, resp); }, 0);
+};
+
+vaLoadKjvData(function () {
+  vaLoadDetectPrompt(function () {
+    p("KJV loaded: " + (VA_KJV_DATA ? "yes" : "NO " + VA_KJV_LOAD_ERROR));
+    p("Prompt loaded: " + (VA_DETECT_PROMPT ? VA_DETECT_PROMPT.length + " chars" : "NO " + VA_DETECT_PROMPT_ERROR));
+
+    // ---- Test 1: validation of individual cues ----
+    p("\n== Validation tests ==");
+    var cases = [
+      { display: "LT", tc_in: "00:01:21,414", tc_out: "00:01:25,018", reference: "Matthew 5-7", mention_type: "named_range", flag: null },
+      { display: "FS", tc_in: "00:14:26,699", tc_out: "00:14:37,899", reference: "Matthew 7:6", mention_type: "quoted_reading", flag: null },
+      { display: "LT", tc_in: "00:03:45,191", tc_out: "00:03:58,171", reference: "1 John 5:14-15", mention_type: "named_citation", flag: null },
+      { display: "LT", tc_in: "00:15:14,179", tc_out: "00:15:20,252", reference: "2 Corinthians 8:21", mention_type: "bible_says_guess", flag: "verify" },
+      { display: "LT", tc_in: "00:10:00,000", tc_out: "00:10:05,000", reference: "Isaiah 49:1", mention_type: "named_citation", flag: null },
+      { display: "LT", tc_in: "00:10:00,000", tc_out: "00:10:05,000", reference: "Isaiah 66:99", mention_type: "named_citation", flag: null },
+      { display: "FS", tc_in: "00:20:00,000", tc_out: "00:20:05,000", reference: "Matthew 5-7", mention_type: "quoted_reading", flag: null },
+      { display: "FS", tc_in: "00:20:00,000", tc_out: "00:20:05,000", reference: "Matthew 7:1-2", mention_type: "quoted_reading", flag: null },
+      { display: "LT", tc_in: "00:30:00,000", tc_out: "00:29:00,000", reference: "John 3:16", mention_type: "named_citation", flag: null },
+      { display: "LT", tc_in: "00:30:00,000", tc_out: "00:31:00,000", reference: "Genesis 1:1", mention_type: "bible_says_guess", flag: "maybe" },
+      { display: "LT", tc_in: "00:31:00,000", tc_out: "00:32:00,000", reference: "Genesis 1:1", mention_type: "bible_says_guess", flag: "unsure" },
+      { display: "LT", tc_in: "00:32:00,000", tc_out: "00:33:00,000", reference: "Matthew 5-7", mention_type: "named_range", flag: null }
+    ];
+    cases.forEach(function (c) {
+      var v = vaValidateCue(c);
+      p((v.ok ? "ACCEPT " : "REJECT ") + c.display + " " + c.reference + " " + c.tc_in + (v.ok ? "" : "  -> " + v.reason));
+    });
+
+    var fsOk = vaValidateCue(cases[1]);
+    if (fsOk.ok) p("FS 'Matthew 7:6' verse words=" + fsOk.cue.wordCount + " hold=" + fsOk.cue.holdSeconds.toFixed(2) + "s displayEnd=" + vaSecondsToSrt(fsOk.cue.displayEndSec));
+
+    // ---- Test 2: real transcript parsing + chunking ----
+    p("\n== Real transcript: 015.srt ==");
+    fetch("../../015.srt").then(function (r) { return r.text(); }).then(function (raw) {
+      var blocks = vaParseSrt(raw);
+      p("Blocks parsed: " + blocks.length + ", first: " + blocks[0].tcIn + " '" + blocks[0].text + "'");
+      p("Last block ends: " + blocks[blocks.length - 1].tcOut);
+      var chunks = vaChunkBlocks(blocks, VA_DETECT_CORE_SECONDS, VA_DETECT_OVERLAP_SECONDS);
+      chunks.forEach(function (c) {
+        p("Chunk " + c.number + ": core " + vaSecondsToSrt(c.coreStart) + "-" + vaSecondsToSrt(c.coreEnd) + ", input blocks " + c.blocks.length + " (" + vaSecondsToSrt(c.winStart) + "-" + vaSecondsToSrt(c.winEnd) + ")");
+      });
+
+      // ---- Test 3: full pipeline with mocked model output ----
+      p("\n== Full pipeline with mocked model output (2 chunks, sequential) ==");
+      var chunkA = JSON.stringify({ cues: [
+        { id: 1, display: "LT", tc_in: "00:01:21,414", tc_out: "00:01:30,000", reference: "Matthew 5-7", mention_type: "named_range", flag: null, boundaries_estimated: false, trigger_quote: "entire sermon on the Mount", note: "" },
+        { id: 2, display: "FS", tc_in: "00:15:59,291", tc_out: "00:16:04,897", reference: "Matthew 7:7", mention_type: "quoted_reading", flag: null, boundaries_estimated: false, trigger_quote: "Ask, and it will be given to you", note: "" },
+        { id: 3, display: "LT", tc_in: "00:02:00,000", tc_out: "00:02:05,000", reference: "Matthew 9:99", mention_type: "named_citation", flag: null, boundaries_estimated: false, trigger_quote: "bad verse", note: "" }
+      ], skipped_notes: [{ tc: "00:01:50,000", quote: "joke", reason: "personal anecdote" }] });
+      var chunkB = JSON.stringify({ cues: [
+        { id: 1, display: "LT", tc_in: "00:01:21,414", tc_out: "00:01:30,000", reference: "Matthew 5-7", mention_type: "named_range", flag: null, boundaries_estimated: false, trigger_quote: "overlap duplicate", note: "" },
+        { id: 2, display: "LT", tc_in: "00:17:00,000", tc_out: "00:18:00,000", reference: "Matthew 7:1", mention_type: "context_verse", flag: null, boundaries_estimated: false, trigger_quote: "judge not", note: "" }
+      ], skipped_notes: [] });
+      mockResponses = [chunkA, chunkB, "not json at all", "still not json"];
+      mockCallCount = 0;
+      vaRunScriptureDetection({ blocks: blocks, apiKey: "test", model: "test" }, function (msg, cls) { p("[" + (cls || "") + "] " + msg); }, function (res) {
+        p("\nDONE. chunkCount=" + res.chunkCount + " cues=" + res.cues.length + " rejected=" + res.rejected.length + " failedChunks=" + res.failedChunks.length + " calls=" + mockCallCount);
+        res.cues.forEach(function (c) { p("  cue " + c.display + " " + c.tc_in + " " + c.reference + (c.flag ? " [" + c.flag + "]" : "")); });
+        res.rejected.forEach(function (r) { p("  rejected: " + r.reference + " -> " + r.reason); });
+        res.failedChunks.forEach(function (f) { p("  failed chunk " + f.chunk + ": " + f.error); });
+        res.skipped.forEach(function (s) { p("  skipped note: " + s.tc + " " + s.reason); });
+      });
+    }).catch(function (e) { p("fetch error: " + e); });
+  });
+});
+</script>
+</body>
+</html>

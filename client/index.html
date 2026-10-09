@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Verse Assist</title>
+  <script src="./CSInterface.js"></script>
+  <script src="./books.js"></script>
+  <script src="./referenceParser.js"></script>
+  <script src="./kjvLookup.js"></script>
+  <script src="./srt.js"></script>
+  <script src="./scriptureDetect.js"></script>
+  <script src="./main.js"></script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+    body {
+      background: #2b2b2b;
+      color: #e0e0e0;
+      font-family: -apple-system, Segoe UI, sans-serif;
+      font-size: 12px;
+      padding: 10px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+    }
+    h2 {
+      margin: 0 0 4px 0;
+      font-size: 15px;
+    }
+    #appInfo {
+      color: #9a9a9a;
+      margin-bottom: 8px;
+    }
+    #appInfo.warn {
+      color: #e0a030;
+    }
+    .tabbar {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 8px;
+      flex: 0 0 auto;
+    }
+    .tabbtn {
+      background: #333;
+      border: 1px solid #555;
+      border-bottom: none;
+      color: #aaa;
+      padding: 6px 12px;
+      cursor: pointer;
+      border-radius: 4px 4px 0 0;
+    }
+    .tabbtn.active {
+      background: #3f3f3f;
+      color: #fff;
+    }
+    .tabpanel {
+      display: none;
+      flex: 1 1 auto;
+      min-height: 0;
+      flex-direction: column;
+    }
+    .tabpanel.active {
+      display: flex;
+    }
+    fieldset {
+      border: 1px solid #555;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      padding: 8px;
+      flex: 0 0 auto;
+    }
+    legend {
+      padding: 0 4px;
+      color: #cfcfcf;
+    }
+    label {
+      display: block;
+      margin-bottom: 4px;
+      color: #cfcfcf;
+    }
+    .row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 6px;
+      align-items: center;
+    }
+    .row input[type="text"] {
+      flex: 1;
+      background: #1e1e1e;
+      color: #e0e0e0;
+      border: 1px solid #555;
+      border-radius: 3px;
+      padding: 4px 6px;
+    }
+    .row input[type="number"] {
+      width: 60px;
+      background: #1e1e1e;
+      color: #e0e0e0;
+      border: 1px solid #555;
+      border-radius: 3px;
+      padding: 4px 6px;
+    }
+    button {
+      background: #3f3f3f;
+      color: #e0e0e0;
+      border: 1px solid #666;
+      border-radius: 3px;
+      padding: 6px 10px;
+      cursor: pointer;
+      margin-bottom: 6px;
+    }
+    button:hover {
+      background: #4a4a4a;
+    }
+    button.toggledOn {
+      background: #2d5a2d;
+      border-color: #4a8a4a;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+      flex: 0 0 auto;
+    }
+    #log {
+      flex: 1 1 auto;
+      min-height: 150px;
+      border: 1px solid #555;
+      border-radius: 4px;
+      padding: 8px;
+      overflow-y: auto;
+      font-family: Consolas, Menlo, monospace;
+      font-size: 11px;
+      white-space: pre-wrap;
+      background: #1e1e1e;
+    }
+    .ok { color: #7fd87f; }
+    .err { color: #e06060; }
+    .info { color: #8fbce0; }
+    .warn { color: #e0a030; }
+
+    /* Stage 2: Verse Viewer */
+    #viewerStatus {
+      color: #9a9a9a;
+      margin-bottom: 6px;
+      flex: 0 0 auto;
+    }
+    #viewerArea {
+      flex: 1 1 auto;
+      min-height: 150px;
+      overflow-y: auto;
+      border: 1px solid #555;
+      border-radius: 4px;
+      padding: 10px;
+      background: #1e1e1e;
+    }
+    #viewerArea.large-text {
+      font-size: 20px;
+      line-height: 1.5;
+    }
+    .verse-card {
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #3a3a3a;
+    }
+    .verse-ref-heading {
+      font-weight: bold;
+      color: #f0d080;
+      margin-bottom: 4px;
+    }
+    .verse-ref-subheading {
+      margin-top: 10px;
+    }
+    .verse-badge {
+      display: inline-block;
+      font-size: 0.7em;
+      font-weight: normal;
+      color: #333;
+      background: #d0a030;
+      border-radius: 3px;
+      padding: 1px 5px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .verse-line {
+      margin-bottom: 2px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .verse-num {
+      color: #888;
+      font-size: 0.8em;
+      vertical-align: super;
+      margin-right: 3px;
+    }
+    .verse-text {
+      flex: 1;
+    }
+    .verse-copy-btn {
+      flex: none;
+      font-size: 0.75em;
+      color: #ccc;
+      background: #3a3a3a;
+      border: 1px solid #555;
+      border-radius: 3px;
+      padding: 1px 6px;
+      cursor: pointer;
+      align-self: center;
+    }
+    .verse-copy-btn:hover {
+      background: #4a4a4a;
+    }
+    .verse-copy-btn.copied {
+      color: #fff;
+      background: #2f7a3d;
+      border-color: #2f7a3d;
+    }
+    .verse-not-found {
+      color: #e06060;
+      font-style: italic;
+    }
+    .empty-state {
+      color: #777;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <h2>Verse Assist Beta <span style="font-size:0.6em; color:#888; font-weight:normal;">v0.1.0</span></h2>
+  <div id="appInfo">Checking Premiere version...</div>
+
+  <div class="tabbar">
+    <div class="tabbtn active" id="tabBtnStage1">Stage 1: MOGRT Tools</div>
+    <div class="tabbtn" id="tabBtnStage2">Stage 2: Verse Viewer</div>
+    <div class="tabbtn" id="tabBtnStage3">Stage 3: Cue List</div>
+    <div class="tabbtn" id="tabBtnStage4">Stage 4: Detect</div>
+    <div class="tabbtn" id="tabBtnStage5">Stage 5: Review</div>
+  </div>
+
+  <div class="tabpanel active" id="tabStage1">
+    <fieldset>
+      <legend>Settings</legend>
+      <label for="mogrtName">MOGRT name (as shown in Project panel) — used first if filled</label>
+      <div class="row">
+        <input type="text" id="mogrtName" placeholder="e.g. ScriptureLowerThird">
+      </div>
+      <label for="mogrtPath">MOGRT file path — fallback, only used if Name above is empty (imports the file if not already in the project)</label>
+      <div class="row">
+        <input type="text" id="mogrtPath" placeholder="C:\path\to\template.mogrt">
+        <button id="browseBtn">Browse...</button>
+      </div>
+      <label for="trackNumber">Video track (V1 = 1, V2 = 2, ...)</label>
+      <div class="row">
+        <input type="number" id="trackNumber" min="1" value="1">
+      </div>
+      <label for="textParamName">Text parameter to set (exact display name, e.g. "LT Text") — Set Test Text only touches this one</label>
+      <div class="row">
+        <input type="text" id="textParamName" placeholder="LT Text">
+      </div>
+      <label for="animationParamName">Animation toggle parameter (exact display name, e.g. "Animation") — turned OFF automatically every time a MOGRT is placed. Leave blank to skip this.</label>
+      <div class="row">
+        <input type="text" id="animationParamName" placeholder="Animation">
+      </div>
+    </fieldset>
+
+    <div class="actions">
+      <button id="insertBtn">Insert MOGRT at Playhead</button>
+      <button id="dumpBtn">Dump Components</button>
+      <button id="setTextBtn">Set Test Text ("John 3:16")</button>
+      <button id="clearLogBtn">Clear Log</button>
+    </div>
+
+    <div id="log"></div>
+  </div>
+
+  <div class="tabpanel" id="tabStage2">
+    <div class="actions">
+      <button id="pollToggleBtn">Start Watching Playhead</button>
+      <label style="display:inline-flex;align-items:center;gap:4px;margin:0 0 6px 0;">
+        <input type="checkbox" id="largeTextToggle"> Large text
+      </label>
+    </div>
+    <div id="viewerStatus">Not watching. Click "Start Watching Playhead" to begin.</div>
+    <div id="viewerArea"><div class="empty-state">No scripture references detected under the playhead yet.</div></div>
+  </div>
+
+  <div class="tabpanel" id="tabStage4">
+    <fieldset>
+      <legend>Settings</legend>
+      <label for="claudeApiKey">Claude API key (stored in this extension's local settings; never sent anywhere except api.anthropic.com)</label>
+      <div class="row">
+        <input type="password" id="claudeApiKey" placeholder="sk-ant-...">
+      </div>
+      <label for="claudeModel">Model</label>
+      <div class="row">
+        <input type="text" id="claudeModel" value="claude-sonnet-5-5">
+      </div>
+      <label for="transcriptPath">Transcript (.srt)</label>
+      <div class="row">
+        <input type="text" id="transcriptPath" placeholder="C:\path\to\episode.srt">
+        <button id="browseTranscriptBtn">Browse...</button>
+      </div>
+    </fieldset>
+    <div class="actions">
+      <button id="runDetectBtn">Run Scripture Detection (single pass)</button>
+      <button id="clearStage4LogBtn">Clear Log</button>
+    </div>
+    <div id="stage4Log" style="flex:1 1 auto; min-height:150px; border:1px solid #555; border-radius:4px; padding:8px; overflow-y:auto; font-family:Consolas,Menlo,monospace; font-size:11px; white-space:pre-wrap; background:#1e1e1e;"></div>
+  </div>
+
+  <div class="tabpanel" id="tabStage5">
+    <fieldset>
+      <legend>Settings</legend>
+      <div style="color:#999; margin-bottom:8px; font-size:11px;">Uses the MOGRT name, video track, text parameter and animation toggle from Stage 1. Re-applying replaces the previous Verse Assist output.</div>
+      <label for="defaultMogrtName">Default MOGRT name (fills gaps between first and last reference, animation off)</label>
+      <div class="row">
+        <input type="text" id="defaultMogrtName" placeholder="e.g. DefaultLowerThird">
+      </div>
+      <label><input type="checkbox" id="fillDefault" checked> Fill gaps with the default MOGRT</label>
+      <label for="meetThresholdFrames">Gaps under this many frames meet halfway (frames)</label>
+      <div class="row"><input type="number" id="meetThresholdFrames" min="0" value="28" style="width:70px;"></div>
+      <label><input type="checkbox" id="labelsEnabled" checked> Colour-label the MOGRTs</label>
+      <label for="srLabelIndex">Scripture MOGRT label colour</label>
+      <div class="row"><select id="srLabelIndex">
+        <option value="0">Violet</option><option value="1">Iris</option><option value="2">Caribbean</option><option value="3">Lavender</option><option value="4">Cerulean</option><option value="5">Forest</option><option value="6">Rose</option><option value="7">Mango</option><option value="8">Purple</option><option value="9">Blue</option><option value="10">Teal</option><option value="11">Magenta</option><option value="12">Tan</option><option value="13" selected>Green</option><option value="14">Brown</option><option value="15">Yellow</option>
+      </select></div>
+      <label for="defLabelIndex">Default MOGRT label colour</label>
+      <div class="row"><select id="defLabelIndex">
+        <option value="0">Violet</option><option value="1">Iris</option><option value="2">Caribbean</option><option value="3">Lavender</option><option value="4">Cerulean</option><option value="5">Forest</option><option value="6">Rose</option><option value="7">Mango</option><option value="8" selected>Purple</option><option value="9">Blue</option><option value="10">Teal</option><option value="11">Magenta</option><option value="12">Tan</option><option value="13">Green</option><option value="14">Brown</option><option value="15">Yellow</option>
+      </select></div>
+      <label><input type="checkbox" id="transitionsEnabled" checked> Add transitions at cuts</label>
+      <label for="transitionName">Transition name (QE, e.g. Cross Dissolve)</label>
+      <div class="row"><input type="text" id="transitionName" value="Cross Dissolve"></div>
+      <label for="srSrFrames">Scripture to scripture transition (frames)</label>
+      <div class="row"><input type="number" id="srSrFrames" min="1" value="15" style="width:70px;"></div>
+      <label for="srDefFrames">Scripture to default transition (frames)</label>
+      <div class="row"><input type="number" id="srDefFrames" min="1" value="25" style="width:70px;"></div>
+      <label for="fsMarkerColor">Fullscreen marker color</label>
+      <div class="row">
+        <select id="fsMarkerColor">
+          <option value="0">Green</option>
+          <option value="1" selected>Red</option>
+          <option value="2">Purple</option>
+          <option value="3">Orange</option>
+          <option value="4">Yellow</option>
+          <option value="5">White</option>
+          <option value="6">Blue</option>
+          <option value="7">Cyan</option>
+        </select>
+      </div>
+      <label><input type="checkbox" id="fsEnabled"> Also place a fullscreen graphic (not just a marker)</label>
+      <label for="fsMogrtName">Fullscreen MOGRT name (must already be imported into the Project panel)</label>
+      <div class="row"><input type="text" id="fsMogrtName" placeholder="e.g. FS Text WFL" value="FS Text WFL"></div>
+      <label for="fsTrackNumber">Fullscreen video track (own track, independent of the LT track above)</label>
+      <div class="row"><input type="number" id="fsTrackNumber" min="1" value="3" style="width:70px;"></div>
+      <label for="fsTextParamName">Fullscreen MOGRT text parameter name (verse text only, no reference)</label>
+      <div class="row"><input type="text" id="fsTextParamName" placeholder="e.g. Text"></div>
+      <label for="fsAnimationParamName">Fullscreen MOGRT animation toggle name (optional, leave blank if none)</label>
+      <div class="row"><input type="text" id="fsAnimationParamName" placeholder="e.g. Animation"></div>
+    </fieldset>
+    <fieldset>
+      <legend>Import detection JSON</legend>
+      <div style="color:#999; margin-bottom:6px; font-size:11px;">Paste a detection result (the guide's cues/skipped_notes format). Each cue is validated against the KJV before it reaches the table.</div>
+      <textarea id="importJson" style="width:100%; height:90px; background:#1e1e1e; color:#e0e0e0; border:1px solid #555; border-radius:3px; font-family:Consolas,Menlo,monospace; font-size:11px;"></textarea>
+      <div class="row"><button id="importJsonBtn">Load into review</button></div>
+    </fieldset>
+    <div class="actions">
+      <button id="approveAllBtn">Approve all</button>
+      <button id="approveNoneBtn">Approve none</button>
+      <button id="applyApprovedBtn">Apply approved</button>
+      <button id="clearReviewBtn">Clear review</button>
+    </div>
+    <div id="reviewSummary" style="color:#9a9a9a; margin-bottom:6px;">No detection results yet. Run Stage 4 first.</div>
+    <div id="reviewTable" style="flex:0 0 auto; max-height:260px; overflow-y:auto; border:1px solid #555; border-radius:4px; margin-bottom:8px;"></div>
+    <div id="stage5Log" style="flex:1 1 auto; min-height:100px; border:1px solid #555; border-radius:4px; padding:8px; overflow-y:auto; font-family:Consolas,Menlo,monospace; font-size:11px; white-space:pre-wrap; background:#1e1e1e;"></div>
+  </div>
+
+  <div class="tabpanel" id="tabStage3">
+    <fieldset>
+      <legend>Settings</legend>
+      <div style="color:#999; margin-bottom:8px; font-size:11px;">Uses the MOGRT name, video track, and text parameter from the "Stage 1: MOGRT Tools" tab.</div>
+      <label for="csvPath">Cue list CSV</label>
+      <div class="row">
+        <input type="text" id="csvPath" placeholder="C:\path\to\cues.csv">
+        <button id="browseCsvBtn">Browse...</button>
+      </div>
+    </fieldset>
+
+    <div class="actions">
+      <button id="runCueListBtn">Run Cue List</button>
+      <button id="clearStage3LogBtn">Clear Log</button>
+    </div>
+
+    <div id="sequenceTimingInfo" style="color:#9a9a9a; margin-bottom: 6px;"></div>
+    <div id="stage3Log" style="flex:1 1 auto; min-height:150px; border:1px solid #555; border-radius:4px; padding:8px; overflow-y:auto; font-family:Consolas,Menlo,monospace; font-size:11px; white-space:pre-wrap; background:#1e1e1e;"></div>
+  </div>
+</body>
+</html>
