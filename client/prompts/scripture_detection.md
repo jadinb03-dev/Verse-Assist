@@ -182,7 +182,7 @@ Premiere's default marker color on purpose.
 | `type` | Trigger |
 |---|---|
 | `Website` | He mentions the website or past broadcasts. |
-| `Helpline` | He mentions calling the helpline or prayer line, or someone receiving salvation or the baptism of the Holy Spirit. |
+| `Helpline` | He mentions calling the helpline or prayer line; someone receiving salvation or the baptism of the Holy Spirit; or he suggests the viewer may want or need prayer - an invitation extended to the viewer in the moment, not merely teaching about prayer as a topic. |
 | `BRoll` | He mentions Vietnam or the facilities the ministry has. |
 | `Definition` | He refers to the definition of a word, in English, Greek or Hebrew. |
 | `Product` | He mentions anything a viewer could buy or obtain: a product, book, CD, DVD or other resource; another teaching or series ("I taught on this in...", "get the teaching on..."); or the current product teaching (see below). Do **not** trigger on the Bible itself or on generic teaching language like "as I'm teaching you today." |
